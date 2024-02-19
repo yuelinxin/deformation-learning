@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 from dataset.medmnist_info import INFO, HOMEPAGE, DEFAULT_ROOT
+from tqdm import tqdm
 
 
 class MedMNIST(Dataset):
@@ -333,33 +334,55 @@ class MedMNIST_All(Dataset):
             transform=None,
             as_rgb=False,
             root=DEFAULT_ROOT,
-            deform=False
+            supervised=False
         ):
         
         self.split = split
         self.transform = transform
         self.as_rgb = as_rgb
         self.root = root
-        self.deform = deform
+        self.supervised = supervised
         
         self.rgb_imgs = []
         self.gray_imgs = []
+        self.labels = []
         
         npz_flags = ["pathmnist", "octmnist", "pneumoniamnist", 
                      "chestmnist", "dermamnist", "retinamnist", 
                      "breastmnist", "bloodmnist", "tissuemnist",
                      "organamnist", "organcmnist", "organsmnist"]
         
-        for flag in npz_flags:   
+        print(f"loading {self.split}_set ...")
+        bar = tqdm(total=len(npz_flags))
+        for flag in npz_flags:
             npz_file = np.load(os.path.join(self.root, f"{flag}_224.npz"))
             imgs = npz_file[f"{self.split}_images"]
+            labels = npz_file[f"{self.split}_labels"]
             if len(imgs.shape) == 4:
                 self.rgb_imgs.append(imgs)
             else:
                 self.gray_imgs.append(imgs)
+            if flag == "chestmnist":
+                labels = [[int(not(np.all(array == 0)))] for array in labels]
+            self.labels.append(labels)
+            bar.update(1)
+        bar.close()
         
         self.rgb_imgs = np.concatenate(self.rgb_imgs, axis=0)
         self.gray_imgs = np.concatenate(self.gray_imgs, axis=0)
+        
+        if self.supervised:
+            self._merge_labels()
+    
+    def _merge_labels(self):
+        res = []
+        current_cls_num = 0
+        for dataset_labels in self.labels:
+            for lb in dataset_labels:
+                res.append(int(lb[0]) + current_cls_num)
+            current_cls_num = np.max(res) + 1
+        assert len(set(res)) == 80, "error when merging labels"
+        self.labels = res
     
     def __len__(self):
         return self.rgb_imgs.shape[0] + self.gray_imgs.shape[0]
@@ -373,17 +396,15 @@ class MedMNIST_All(Dataset):
             img = self.gray_imgs[idx-rgb_size]
             
         img = Image.fromarray(img)
+        label = self.labels[idx]
         
         if self.as_rgb:
             img = img.convert("RGB")
         
         if self.transform is not None:
-            if self.deform:
-                original = img
-                def_img = self.transform(img)
-                return original, def_img
-            else:
-                img = self.transform(img)
-            
-        return img
-    
+            img = self.transform(img)
+        
+        if self.supervised:
+            return img, label
+        else:
+            return img

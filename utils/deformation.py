@@ -94,21 +94,6 @@ def apply_individual_deformation(images, deformations, random=True):
     return deformed_images
 
 
-class ApplyDeformationTransform:
-    def __init__(self, deformations):
-        self.deformations = deformations
-
-    def __call__(self, image):
-        """
-        Apply the deformation to the image.
-
-        :param img: PIL Image or Tensor.
-        :return: Deformed Image as a Tensor.
-        """
-        deformed_image =  apply_deformation(image, self.deformations)
-        return image, deformed_image
-
-
 def apply_deformation(image, deformations):
     """
     Apply a random deformation to an image.

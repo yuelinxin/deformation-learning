@@ -11,7 +11,7 @@ from functools import partial, reduce
 from operator import mul
 
 from timm.models.vision_transformer import VisionTransformer, _cfg
-from timm.models.layers.helpers import to_2tuple
+from timm.models.layers import to_2tuple
 from timm.models.layers import PatchEmbed
 
 __all__ = [
@@ -63,7 +63,7 @@ class VisionTransformerMoCo(VisionTransformer):
         out_h = torch.einsum('m,d->md', [grid_h.flatten(), omega])
         pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]
 
-        assert self.num_tokens == 1, 'Assuming one and only one token, [cls]'
+        assert self.num_prefix_tokens == 1, 'Assuming one and only one token, [cls]'
         pe_token = torch.zeros([1, 1, self.embed_dim], dtype=torch.float32)
         self.pos_embed = nn.Parameter(torch.cat([pe_token, pos_emb], dim=1))
         self.pos_embed.requires_grad = False
@@ -114,14 +114,14 @@ class ConvStem(nn.Module):
 
 def vit_small(**kwargs):
     model = VisionTransformerMoCo(
-        patch_size=16, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        patch_size=14, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 def vit_base(**kwargs):
     model = VisionTransformerMoCo(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model

@@ -1,5 +1,7 @@
 from torchvision import transforms
-from deformation import *
+from utils.deformation import *
+from PIL import ImageFilter, ImageOps
+import random
 
 
 """MAE Transforms"""
@@ -19,31 +21,43 @@ mae_test_transform = transforms.Compose([
 
 
 """Deform Transforms"""
+deformations = torch.load('/root/autodl-fs/kernel-transformer/def.pt')
+idx = np.random.choice(len(deformations), 100, replace=False)
+val_deformations = [deformations[i] for i in idx]
+
+class DeformationTransform:
+    def __init__(self, deformations):
+        self.deformations = deformations
+
+    def __call__(self, image):
+        deformed_image = apply_deformation(image, self.deformations)
+        return [image, deformed_image]
+
 deform_train_transform = transforms.Compose([
     transforms.Resize((224, 224)),
-    transforms.RandomCrop(224, padding=4),
+    # transforms.RandomCrop(224, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
     transforms.RandomResizedCrop(224, scale=(0.2, 1.0), interpolation=3),
-    transforms.RandomRotation(40),
-    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-    transforms.RandomAffine(degrees=0, translate=(0.5, 0.5), scale=(0.5, 1.5)),
-    transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
+    # transforms.RandomRotation(40),
+    # transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+    # transforms.RandomAffine(degrees=0, translate=(0.5, 0.5), scale=(0.5, 1.5)),
+    # transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), 
-    # ApplyDeformationTransform(deformations),
+    DeformationTransform(deformations),
 ])
 deform_test_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    # ApplyDeformationTransform(val_deformations),
+    DeformationTransform(val_deformations),
 ])
 
 
 """MoCo Transforms"""
 class MoCoTwoCropsTransform:
-    def __init__(self, base_transform1=moco_aug_1, base_transform2=moco_aug_2):
+    def __init__(self, base_transform1, base_transform2):
         self.base_transform1 = base_transform1
         self.base_transform2 = base_transform2
 
