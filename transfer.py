@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 import argparse
 from tqdm import tqdm
+from sklearn.metrics import f1_score
 
 # utils
 from utils.csv_logger import log_csv
@@ -145,6 +146,7 @@ for epoch in range(start_epoch, num_epochs):
     model.train()
     running_loss = 0.0
     correct, total = 0, 0
+    top2_correct = 0
     print(f'\nEpoch {epoch+1}/{num_epochs}')
     bar = tqdm(total=len(train_loader))
     for images, labels in train_loader:
@@ -158,9 +160,11 @@ for epoch in range(start_epoch, num_epochs):
             outputs = model(images)
             # calculate training accuracy
             _, predicted = torch.max(outputs.data, 1)
+            _, top2_predicted = torch.topk(outputs.data, 2)
             # _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+            top2_correct += ((top2_predicted == labels.unsqueeze(1)).sum(dim=1) > 0).sum().item()
             loss = criterion(outputs, labels)
 
         scaler.scale(loss).backward()
@@ -176,11 +180,16 @@ for epoch in range(start_epoch, num_epochs):
     train_accuracy = round((correct / total) * 100, 2)
     print(f'Training Accuracy: {train_accuracy}')
 
+    top2_accuracy = round((top2_correct / total) * 100, 2)
+    print(f'Top-2 Accuracy: {top2_accuracy}')
+
     epoch_loss = running_loss / len(train_dataset)
     print(f'Loss: {epoch_loss}')
 
     model.eval()
     correct, total = 0, 0
+    top2_correct = 0
+    all_labels, all_preds = [], []
     with torch.no_grad():
         bar = tqdm(total=len(test_loader))
         for images, labels in test_loader:
@@ -191,9 +200,14 @@ for epoch in range(start_epoch, num_epochs):
             # outputs = model(images, masked=False)
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
+            _, top2_predicted = torch.topk(outputs.data, 2)
             # _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+            top2_correct += ((top2_predicted == labels.unsqueeze(1)).sum(dim=1) > 0).sum().item()
+
+            all_labels.extend(labels.cpu().numpy())
+            all_preds.extend(predicted.cpu().numpy())
 
             bar.update(1)
 
@@ -201,6 +215,12 @@ for epoch in range(start_epoch, num_epochs):
 
     accuracy = round((correct / total) * 100, 2)
     print(f'Val. Accuracy: {accuracy}')
+
+    top2_accuracy = round((top2_correct / total) * 100, 2)
+    print(f'Val. Top-2 Accuracy: {top2_accuracy}')
+
+    f1 = f1_score(all_labels, all_preds, average='macro')
+    print(f'F1 Score: {f1}')
 
     if args.save_model:
         save_checkpoint({
